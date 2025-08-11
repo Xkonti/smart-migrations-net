@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup Label="Build">
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
     </PropertyGroup>
 
     <PropertyGroup Label="Package">
         <Product>SmartMigrations</Product>
-        <Description>Project Description</Description>
+        <Description>A database-agnostic migration planning and execution library for .NET that intelligently finds the optimal path between database schema versions.</Description>
         <PackageTags>database;migration;version;</PackageTags>
     </PropertyGroup>
+
 
 </Project>

@@ -7,12 +7,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Temporarily disable MinVer due to segmentation fault issues -->
+    <MinVerSkip>true</MinVerSkip>
   </PropertyGroup>
 
   <PropertyGroup Label="Package">
-    <Authors>Beniamin Dudek aka Xkonti</Authors>
-    <Company>Beniamin Dudek aka Xkonti</Company>
-    <Copyright>Copyright © Beniamin Dudek aka Xkonti. All rights Reserved</Copyright>
+    <Authors>Beniamin Dudek</Authors>
+    <Company>Beniamin Dudek</Company>
+    <Copyright>Copyright © Beniamin Dudek. All rights Reserved</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Xkonti/smart-migrations-net</PackageProjectUrl>
