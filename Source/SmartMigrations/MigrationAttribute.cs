@@ -3,7 +3,7 @@ namespace SmartMigrations;
 /// <summary>
 /// Marks a class as a database migration with version information and execution preferences.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class MigrationAttribute : Attribute
 {
     /// <summary>
