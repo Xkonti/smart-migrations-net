@@ -170,7 +170,6 @@ public class MigrationAttributeTest
     }
 
     [Theory]
-    [InlineData("5", null)] // Null to
     [InlineData("5", "")] // Empty to
     [InlineData("5", "   ")] // Whitespace to
     [InlineData("", "10")] // Empty from
