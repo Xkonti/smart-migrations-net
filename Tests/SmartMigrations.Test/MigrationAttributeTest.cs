@@ -50,6 +50,7 @@ public class MigrationAttributeTest
     [Theory]
     [InlineData(0, 0, false)]
     [InlineData(5, 5, true)]
+    [InlineData(-42, -42, true)]
     [InlineData(100, 100, false)]
     [InlineData(int.MaxValue, int.MaxValue, true)]
     public void Constructor_SingleFrom_ThrowsArgumentException(int from, int to, bool shouldAvoid)
@@ -80,6 +81,8 @@ public class MigrationAttributeTest
 
     [Theory]
     [InlineData(new int[] { 1, 5 }, 5, false)] // Contains to version
+    [InlineData(new int[] { 7, -12 }, 7, false)] // Contains to version
+    [InlineData(new int[] { 7, -12 }, -12, true)] // Contains to version
     [InlineData(new int[] { 10, 20, 30 }, 20, true)] // Contains to version in middle
     [InlineData(new int[] { 5 }, 5, false)] // Single item equals to
     public void Constructor_FromList_WithToVersionInList_ThrowsArgumentException(int[] fromList, int to, bool shouldAvoid)
@@ -101,12 +104,12 @@ public class MigrationAttributeTest
     [InlineData(1, 3, 10, false, new int[] { 1, 3 }, 10, true, false)] // Note: Range stores [start, end] not full sequence
     [InlineData(5, 5, 8, true, new int[] { 5, 5 }, 8, true, true)] // Single value range
     [InlineData(0, 2, 5, false, new int[] { 0, 2 }, 5, true, false)]
-    [InlineData(10, 15, 20, true, new int[] { 10, 15 }, 20, true, true)]
+    [InlineData(-10, 15, 20, true, new int[] { -10, 15 }, 20, true, true)]
     [InlineData(0, 0, 1, false, new int[] { 0, 0 }, 1, true, false)]
     [InlineData(100, 200, 300, false, new int[] { 100, 200 }, 300, true, false)]
     public void Constructor_Range_Success(int start, int end, int to, bool shouldAvoid, int[] expectedFromVersions, int expectedTo, bool expectedIsRange, bool expectedShouldAvoid)
     {
-        var attribute = new MigrationAttribute((start, end), to, shouldAvoid);
+        var attribute = new MigrationAttribute(start, end, to, shouldAvoid);
         Assert.Equal(expectedFromVersions, attribute.FromVersions);
         Assert.Equal(expectedTo, attribute.ToVersion);
         Assert.Equal(expectedIsRange, attribute.IsRange);
@@ -116,21 +119,22 @@ public class MigrationAttributeTest
     [Theory]
     [InlineData(5, 3, 10, false)]
     [InlineData(10, 5, 15, true)]
+    [InlineData(-10, -55, 15, true)]
     [InlineData(100, 50, 200, false)]
     public void Constructor_Range_WithInvalidRange_ThrowsArgumentException(int start, int end, int to, bool shouldAvoid)
     {
-        Assert.Throws<ArgumentException>(() => new MigrationAttribute((start, end), to, shouldAvoid));
+        Assert.Throws<ArgumentException>(() => new MigrationAttribute(start, end, to, shouldAvoid));
     }
 
     [Theory]
     [InlineData(5, 10, 7, false)]
     [InlineData(1, 5, 3, true)]
-    [InlineData(10, 20, 15, false)]
+    [InlineData(-10, 20, 15, false)]
     [InlineData(5, 10, 5, true)]
     [InlineData(5, 10, 10, false)]
     public void Constructor_Range_WithToVersionInRange_ThrowsArgumentException(int start, int end, int to, bool shouldAvoid)
     {
-        Assert.Throws<ArgumentException>(() => new MigrationAttribute((start, end), to, shouldAvoid));
+        Assert.Throws<ArgumentException>(() => new MigrationAttribute(start, end, to, shouldAvoid));
     }
 
     #endregion
@@ -207,7 +211,7 @@ public class MigrationAttributeTest
     [MigrationAttribute(10)]                                    // Constructor 1: to only
     [MigrationAttribute(5, 15)]                                 // Constructor 2: single from/to
     [MigrationAttribute(new int[] { 1, 3, 7 }, 20)]           // Constructor 3: list from/to
-    [MigrationAttribute((8, 12), 25, true)]                    // Constructor 4: range from/to with shouldAvoid
+    [MigrationAttribute(8, 12, 25, true)]                      // Constructor 4: range from/to with shouldAvoid
     [MigrationAttribute(null, "30")]                           // Constructor 5: string - null from
     [MigrationAttribute("2", "35")]                            // Constructor 6: string - single from
     [MigrationAttribute("4,6,9", "40")]                        // Constructor 7: string - list from

@@ -60,12 +60,12 @@ public class MigrationAttribute : Attribute
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with multiple source versions.
     /// </summary>
-    /// <param name="fromList">The collection of versions this migration can migrate from. Cannot be null.</param>
+    /// <param name="fromList">The array of versions this migration can migrate from. Cannot be null.</param>
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="fromList"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="fromList"/> contains the same version as <paramref name="to"/>.</exception>
-    public MigrationAttribute(IEnumerable<int> fromList, int to, bool shouldAvoid = false)
+    public MigrationAttribute(int[] fromList, int to, bool shouldAvoid = false)
     {
         ArgumentNullException.ThrowIfNull(fromList);
         FromVersions = fromList
@@ -81,17 +81,18 @@ public class MigrationAttribute : Attribute
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a range of source versions.
     /// </summary>
-    /// <param name="fromRange">A tuple representing the inclusive range of versions this migration can migrate from (start, end).</param>
+    /// <param name="fromRangeStart">The start of the inclusive range of versions this migration can migrate from.</param>
+    /// <param name="fromRangeEnd">The end of the inclusive range of versions this migration can migrate from.</param>
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentException">Thrown when range start is greater than the range end, or when <paramref name="to"/> is within the range.</exception>
-    public MigrationAttribute((int start, int end) fromRange, int to, bool shouldAvoid = false)
+    public MigrationAttribute(int fromRangeStart, int fromRangeEnd, int to, bool shouldAvoid = false)
     {
-        if (fromRange.start > fromRange.end)
-            throw new ArgumentException("Range start cannot be greater than range end.", nameof(fromRange));
-        if (fromRange.start <= to && to <= fromRange.end)
+        if (fromRangeStart > fromRangeEnd)
+            throw new ArgumentException("Range start cannot be greater than range end.", nameof(fromRangeStart));
+        if (fromRangeStart <= to && to <= fromRangeEnd)
             throw new ArgumentException("To version cannot be within the from version range.", nameof(to));
-        FromVersions = [fromRange.start, fromRange.end];
+        FromVersions = [fromRangeStart, fromRangeEnd];
         IsRange = true;
         ToVersion = to;
         ShouldAvoid = shouldAvoid;
