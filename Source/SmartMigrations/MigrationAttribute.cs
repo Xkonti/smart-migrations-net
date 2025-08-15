@@ -6,19 +6,6 @@ namespace SmartMigrations;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class MigrationAttribute : Attribute
 {
-    // The static method holding checks for the shared migration data validity
-    private static MigrationAttribute CreateMigrationAttribute(
-        int[] fromList,
-        bool isRange,
-        int to,
-        string? fromSchema,
-        string? toSchema,
-        bool shouldAvoid
-    )
-    {
-        return new MigrationAttribute(fromList, isRange, to, fromSchema, toSchema, shouldAvoid);
-    }
-
     /// <summary>
     /// Gets the list of versions this migration can migrate from.
     /// </summary>
@@ -134,8 +121,19 @@ public sealed class MigrationAttribute : Attribute
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="to"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> or <paramref name="to"/> contains an invalid version format, is empty/whitespace, when from and to versions are the same, when to version is within a from range, or when a from list contains the to version.</exception>
-    public MigrationAttribute(string? from, string to, bool shouldAvoid = false)
+    public MigrationAttribute(string? from, string to, string? fromSchema, string? toSchema, bool shouldAvoid = false)
     {
+        // Verify Schema
+        fromSchema = fromSchema?.Trim();
+        if (fromSchema != null && string.IsNullOrWhiteSpace(fromSchema))
+            throw new ArgumentException("TODO from schema must be defined (null is a valid value)", nameof(fromSchema));
+        FromSchema = fromSchema;
+
+        toSchema = toSchema?.Trim();
+        if (toSchema != null && string.IsNullOrWhiteSpace(toSchema))
+            throw new ArgumentException("TODO to schema must be defined (null is a valid value)", nameof(toSchema));
+        ToSchema = toSchema;
+
         ArgumentNullException.ThrowIfNull(to);
 
         if (string.IsNullOrWhiteSpace(to))
