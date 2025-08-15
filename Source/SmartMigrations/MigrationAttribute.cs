@@ -4,12 +4,25 @@ namespace SmartMigrations;
 /// Marks a class as a database migration with version information and execution preferences.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
-public class MigrationAttribute : Attribute
+public sealed class MigrationAttribute : Attribute
 {
+    // The static method holding checks for the shared migration data validity
+    private static MigrationAttribute CreateMigrationAttribute(
+        int[] fromList,
+        bool isRange,
+        int to,
+        string? fromSchema,
+        string? toSchema,
+        bool shouldAvoid
+    )
+    {
+        return new MigrationAttribute(fromList, isRange, to, fromSchema, toSchema, shouldAvoid);
+    }
+
     /// <summary>
     /// Gets the list of versions this migration can migrate from.
     /// </summary>
-    public List<int> FromVersions { get; }
+    public int[] FromVersions { get; }
 
     /// <summary>
     /// Gets a value whether the list of versions represents a from-to range.
@@ -21,11 +34,55 @@ public class MigrationAttribute : Attribute
     /// </summary>
     public int ToVersion { get; }
 
+    // TODO NEeds docs
+    public string? FromSchema { get; }
+
+    // TODO Needs docs
+    public string? ToSchema { get; }
+
     /// <summary>
     /// Gets a value indicating whether this migration should be avoided if alternative paths exist.
     /// Migrations marked as should avoid are used only when no other path is available.
     /// </summary>
     public bool ShouldAvoid { get; }
+
+
+    private MigrationAttribute(
+        int[] fromList,
+        bool isRange,
+        int to,
+        string? fromSchema,
+        string? toSchema,
+        bool shouldAvoid
+    )
+    {
+        fromList = fromList.Distinct().ToArray();
+
+        if (isRange)
+        {
+            if (fromList.Length != 2) throw new ArgumentException("TODO Range must have 2 values only", nameof(fromList));
+            if (fromList[0] >= fromList[1]) throw new ArgumentException("TODO end of range must be greater that then start", nameof(fromList));
+            if (fromList[0] <= to && to <= fromList[1]) throw new ArgumentException("TODO To can't be inside range of from", nameof(fromList));
+        }
+
+        if (fromList.Contains(to)) throw new ArgumentException("TODO To can't be same as from", nameof(to));
+
+        fromSchema = fromSchema?.Trim();
+        if (fromSchema != null && string.IsNullOrWhiteSpace(fromSchema))
+            throw new ArgumentException("TODO from schema must be defined (null is a valid value)", nameof(fromSchema));
+
+        toSchema = toSchema?.Trim();
+        if (toSchema != null && string.IsNullOrWhiteSpace(toSchema))
+            throw new ArgumentException("TODO to schema must be defined (null is a valid value)", nameof(toSchema));
+
+        FromVersions = fromList;
+        IsRange = isRange;
+        ToVersion = to;
+        FromSchema = fromSchema;
+        ToSchema = toSchema;
+        ShouldAvoid = shouldAvoid;
+    }
+
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class for setting up the database schema from scratch.
@@ -34,12 +91,7 @@ public class MigrationAttribute : Attribute
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     public MigrationAttribute(int to, bool shouldAvoid = false)
-    {
-        FromVersions = [];
-        IsRange = false;
-        ToVersion = to;
-        ShouldAvoid = shouldAvoid;
-    }
+        : this([], false, to, null, null, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a single source version.
@@ -49,13 +101,7 @@ public class MigrationAttribute : Attribute
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> and <paramref name="to"/> are the same value.</exception>
     public MigrationAttribute(int from, int to, bool shouldAvoid = false)
-    {
-        if (from == to) throw new ArgumentException("From version cannot be the same as to version.", nameof(from));
-        FromVersions = [from];
-        IsRange = false;
-        ToVersion = to;
-        ShouldAvoid = shouldAvoid;
-    }
+        : this([from], false, to, null, null, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with multiple source versions.
@@ -66,17 +112,7 @@ public class MigrationAttribute : Attribute
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="fromList"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="fromList"/> contains the same version as <paramref name="to"/>.</exception>
     public MigrationAttribute(int[] fromList, int to, bool shouldAvoid = false)
-    {
-        ArgumentNullException.ThrowIfNull(fromList);
-        FromVersions = fromList
-            .Distinct()
-            .ToList();
-
-        if (FromVersions.Contains(to)) throw new ArgumentException("From version list cannot contain the same version as the to version.", nameof(fromList));
-        IsRange = false;
-        ToVersion = to;
-        ShouldAvoid = shouldAvoid;
-    }
+        : this(fromList, false, to, null, null, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a range of source versions.
@@ -87,16 +123,7 @@ public class MigrationAttribute : Attribute
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentException">Thrown when range start is greater than the range end, or when <paramref name="to"/> is within the range.</exception>
     public MigrationAttribute(int fromRangeStart, int fromRangeEnd, int to, bool shouldAvoid = false)
-    {
-        if (fromRangeStart > fromRangeEnd)
-            throw new ArgumentException("Range start cannot be greater than range end.", nameof(fromRangeStart));
-        if (fromRangeStart <= to && to <= fromRangeEnd)
-            throw new ArgumentException("To version cannot be within the from version range.", nameof(to));
-        FromVersions = [fromRangeStart, fromRangeEnd];
-        IsRange = true;
-        ToVersion = to;
-        ShouldAvoid = shouldAvoid;
-    }
+        : this([fromRangeStart, fromRangeEnd], true, to, null, null, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with string-based version specification.
