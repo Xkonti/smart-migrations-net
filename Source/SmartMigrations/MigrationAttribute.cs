@@ -6,19 +6,6 @@ namespace SmartMigrations;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class MigrationAttribute : Attribute
 {
-    // The static method holding checks for the shared migration data validity
-    private static MigrationAttribute CreateMigrationAttribute(
-        int[] fromList,
-        bool isRange,
-        int to,
-        string? fromSchema,
-        string? toSchema,
-        bool shouldAvoid
-    )
-    {
-        return new MigrationAttribute(fromList, isRange, to, fromSchema, toSchema, shouldAvoid);
-    }
-
     /// <summary>
     /// Gets the list of versions this migration can migrate from.
     /// </summary>
@@ -48,11 +35,11 @@ public sealed class MigrationAttribute : Attribute
 
 
     private MigrationAttribute(
+        string? fromSchema,
         int[] fromList,
         bool isRange,
-        int to,
-        string? fromSchema,
         string? toSchema,
+        int to,
         bool shouldAvoid
     )
     {
@@ -67,22 +54,28 @@ public sealed class MigrationAttribute : Attribute
 
         if (fromList.Contains(to)) throw new ArgumentException("TODO To can't be same as from", nameof(to));
 
-        fromSchema = fromSchema?.Trim();
-        if (fromSchema != null && string.IsNullOrWhiteSpace(fromSchema))
+        FromSchema = fromSchema?.Trim();
+        if (FromSchema != null && string.IsNullOrWhiteSpace(FromSchema))
             throw new ArgumentException("TODO from schema must be defined (null is a valid value)", nameof(fromSchema));
 
-        toSchema = toSchema?.Trim();
-        if (toSchema != null && string.IsNullOrWhiteSpace(toSchema))
+        ToSchema = toSchema?.Trim();
+        if (ToSchema != null && string.IsNullOrWhiteSpace(ToSchema))
             throw new ArgumentException("TODO to schema must be defined (null is a valid value)", nameof(toSchema));
 
         FromVersions = fromList;
+        if (FromVersions.Length == 0 && FromSchema != ToSchema)
+        {
+            throw new ArgumentException("Migration setting up schema from scratch can't have different 'from' and 'to' schemas.", nameof(fromList));
+        }
+
         IsRange = isRange;
         ToVersion = to;
-        FromSchema = fromSchema;
-        ToSchema = toSchema;
         ShouldAvoid = shouldAvoid;
     }
 
+    // If this migration sets the schema from scratch, it doesn't make sense for it to have 2 different from/to schemas
+    public MigrationAttribute(string? schema, int to, bool shouldAvoid = false)
+        : this(schema, [], false, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class for setting up the database schema from scratch.
@@ -91,7 +84,13 @@ public sealed class MigrationAttribute : Attribute
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     public MigrationAttribute(int to, bool shouldAvoid = false)
-        : this([], false, to, null, null, shouldAvoid) {}
+        : this(null, [], false, null, to, shouldAvoid) {}
+
+    public MigrationAttribute(string? fromSchema, int from, string? toSchema, int to, bool shouldAvoid = false)
+        : this(fromSchema, [from], false, toSchema, to, shouldAvoid) {}
+
+    public MigrationAttribute(string? schema, int from, int to, bool shouldAvoid = false)
+        : this(schema, [from], false, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a single source version.
@@ -101,7 +100,13 @@ public sealed class MigrationAttribute : Attribute
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> and <paramref name="to"/> are the same value.</exception>
     public MigrationAttribute(int from, int to, bool shouldAvoid = false)
-        : this([from], false, to, null, null, shouldAvoid) {}
+        : this(null, [from], false, null, to, shouldAvoid) {}
+
+    public MigrationAttribute(string? fromSchema, int[] fromList, string? toSchema, int to, bool shouldAvoid = false)
+        : this(fromSchema, fromList, false, toSchema, to, shouldAvoid) {}
+
+    public MigrationAttribute(string? schema, int[] fromList, int to, bool shouldAvoid = false)
+        : this(schema, fromList, false, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with multiple source versions.
@@ -112,7 +117,13 @@ public sealed class MigrationAttribute : Attribute
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="fromList"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="fromList"/> contains the same version as <paramref name="to"/>.</exception>
     public MigrationAttribute(int[] fromList, int to, bool shouldAvoid = false)
-        : this(fromList, false, to, null, null, shouldAvoid) {}
+        : this(null, fromList, false, null, to, shouldAvoid) {}
+
+    public MigrationAttribute(string? fromSchema, int fromRangeStart, int fromRangeEnd, string? toSchema, int to, bool shouldAvoid = false)
+        : this(fromSchema, [fromRangeStart, fromRangeEnd], true, toSchema, to, shouldAvoid) {}
+
+    public MigrationAttribute(string? schema, int fromRangeStart, int fromRangeEnd, int to, bool shouldAvoid = false)
+        : this(schema, [fromRangeStart, fromRangeEnd], true, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a range of source versions.
@@ -123,7 +134,7 @@ public sealed class MigrationAttribute : Attribute
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentException">Thrown when range start is greater than the range end, or when <paramref name="to"/> is within the range.</exception>
     public MigrationAttribute(int fromRangeStart, int fromRangeEnd, int to, bool shouldAvoid = false)
-        : this([fromRangeStart, fromRangeEnd], true, to, null, null, shouldAvoid) {}
+        : this(null, [fromRangeStart, fromRangeEnd], true, null, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with string-based version specification.
@@ -134,18 +145,29 @@ public sealed class MigrationAttribute : Attribute
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="to"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> or <paramref name="to"/> contains an invalid version format, is empty/whitespace, when from and to versions are the same, when to version is within a from range, or when a from list contains the to version.</exception>
-    public MigrationAttribute(string? from, string to, bool shouldAvoid = false)
+    public MigrationAttribute(string? fromSchema, string? from, string? toSchema, string to, bool shouldAvoid = false)
     {
-        ArgumentNullException.ThrowIfNull(to);
+        // Schemas
+        FromSchema = fromSchema?.Trim();
+        if (FromSchema != null && string.IsNullOrWhiteSpace(FromSchema))
+            throw new ArgumentException("TODO from schema must be defined (null is a valid value)", nameof(fromSchema));
+        ToSchema = toSchema?.Trim();
+        if (ToSchema != null && string.IsNullOrWhiteSpace(ToSchema))
+            throw new ArgumentException("TODO to schema must be defined (null is a valid value)", nameof(toSchema));
 
+        // To
+        ArgumentNullException.ThrowIfNull(to);
         if (string.IsNullOrWhiteSpace(to))
             throw new ArgumentException("To version cannot be empty or whitespace.", nameof(to));
-
         if (!int.TryParse(to.Trim(), out var toVersion))
             throw new ArgumentException("To version must be an integer.", nameof(to));
-
         ToVersion = toVersion;
+
+        // Should avoid
         ShouldAvoid = shouldAvoid;
+
+        // From & IsRange
+
         IsRange = false;
 
         // Handle null "from"
@@ -197,7 +219,7 @@ public sealed class MigrationAttribute : Attribute
                     return version;
                 })
                 .Distinct()
-                .ToList();
+                .ToArray();
 
             if (FromVersions.Contains(ToVersion))
                 throw new ArgumentException("From version list cannot contain the same version as the to version.", nameof(from));
@@ -211,5 +233,18 @@ public sealed class MigrationAttribute : Attribute
                 throw new ArgumentException("From version cannot be the same as to version.", nameof(from));
             FromVersions = [version];
         }
+
+        if (FromVersions.Length == 0 && FromSchema != ToSchema)
+        {
+            throw new ArgumentException("Migration setting up schema from scratch can't have different 'from' and 'to' schemas.", nameof(from));
+        }
     }
+
+    // When only one schema is provided, it means that the migration is fully within it's tree
+    public MigrationAttribute(string? schema, string? from, string to, bool shouldAvoid = false)
+        : this(schema, from, schema, to, shouldAvoid) { }
+
+    // No schema means both are set to `null` (default)
+    public MigrationAttribute(string? from, string to, bool shouldAvoid = false)
+        : this(null, from, null, to, shouldAvoid) { }
 }
