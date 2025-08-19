@@ -10,4 +10,8 @@
         <ProjectReference Include="..\..\Source\SmartMigrations\SmartMigrations.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Update="MinVer" Version="6.1.0-beta.1" />
+    </ItemGroup>
+
 </Project>
