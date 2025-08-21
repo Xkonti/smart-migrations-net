@@ -6,19 +6,6 @@ namespace SmartMigrations;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class MigrationAttribute : Attribute
 {
-    // The static method holding checks for the shared migration data validity
-    private static MigrationAttribute CreateMigrationAttribute(
-        int[] fromList,
-        bool isRange,
-        int to,
-        string? fromSchema,
-        string? toSchema,
-        bool shouldAvoid
-    )
-    {
-        return new MigrationAttribute(fromList, isRange, to, fromSchema, toSchema, shouldAvoid);
-    }
-
     /// <summary>
     /// Gets the list of versions this migration can migrate from.
     /// </summary>
@@ -34,10 +21,16 @@ public sealed class MigrationAttribute : Attribute
     /// </summary>
     public int ToVersion { get; }
 
-    // TODO NEeds docs
+    /// <summary>
+    /// Gets the schema this migration can migrate from. Null indicates the default schema.
+    /// Used for cross-schema migration capability.
+    /// </summary>
     public string? FromSchema { get; }
 
-    // TODO Needs docs
+    /// <summary>
+    /// Gets the schema this migration migrates to. Null indicates the default schema.
+    /// Used for cross-schema migration capability.
+    /// </summary>
     public string? ToSchema { get; }
 
     /// <summary>
@@ -46,13 +39,17 @@ public sealed class MigrationAttribute : Attribute
     /// </summary>
     public bool ShouldAvoid { get; }
 
-
+    /// <summary>
+    /// A private constructor that takes all available values and performs the validation.
+    /// Its purpose is to be used by other, more user-friendly constructors.
+    /// </summary>
+    /// <exception cref="ArgumentException">When provided values were invalid</exception>
     private MigrationAttribute(
+        string? fromSchema,
         int[] fromList,
         bool isRange,
-        int to,
-        string? fromSchema,
         string? toSchema,
+        int to,
         bool shouldAvoid
     )
     {
@@ -67,85 +64,188 @@ public sealed class MigrationAttribute : Attribute
 
         if (fromList.Contains(to)) throw new ArgumentException("TODO To can't be same as from", nameof(to));
 
-        fromSchema = fromSchema?.Trim();
-        if (fromSchema != null && string.IsNullOrWhiteSpace(fromSchema))
+        FromSchema = fromSchema?.Trim();
+        if (FromSchema != null && string.IsNullOrWhiteSpace(FromSchema))
             throw new ArgumentException("TODO from schema must be defined (null is a valid value)", nameof(fromSchema));
 
-        toSchema = toSchema?.Trim();
-        if (toSchema != null && string.IsNullOrWhiteSpace(toSchema))
+        ToSchema = toSchema?.Trim();
+        if (ToSchema != null && string.IsNullOrWhiteSpace(ToSchema))
             throw new ArgumentException("TODO to schema must be defined (null is a valid value)", nameof(toSchema));
 
         FromVersions = fromList;
+        if (FromVersions.Length == 0 && FromSchema != ToSchema)
+        {
+            throw new ArgumentException("Migration setting up schema from scratch can't have different 'from' and 'to' schemas.", nameof(fromList));
+        }
+
         IsRange = isRange;
         ToVersion = to;
-        FromSchema = fromSchema;
-        ToSchema = toSchema;
         ShouldAvoid = shouldAvoid;
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class for setting up a specific schema from scratch.
+    /// This constructor creates a migration that can be applied when no version exists in the specified schema (initial setup migration).
+    /// </summary>
+    /// <param name="schema">The schema this migration operates within. Null indicates the default schema.</param>
+    /// <param name="to">The version this migration migrates to.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    public MigrationAttribute(string? schema, int to, bool shouldAvoid = false)
+        : this(schema, [], false, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class for setting up the database schema from scratch.
     /// This constructor creates a migration that can be applied when no version exists in the database (initial setup migration).
+    /// Uses the default schema.
     /// </summary>
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     public MigrationAttribute(int to, bool shouldAvoid = false)
-        : this([], false, to, null, null, shouldAvoid) {}
+        : this(null, [], false, null, to, shouldAvoid) {}
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with cross-schema migration capability.
+    /// Allows migration from one schema to another, enabling schema transitions.
+    /// </summary>
+    /// <param name="fromSchema">The schema this migration can migrate from. Null indicates the default schema.</param>
+    /// <param name="from">The version this migration can migrate from.</param>
+    /// <param name="toSchema">The schema this migration migrates to. Null indicates the default schema.</param>
+    /// <param name="to">The version this migration migrates to.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> and <paramref name="to"/> are the same value.</exception>
+    public MigrationAttribute(string? fromSchema, int from, string? toSchema, int to, bool shouldAvoid = false)
+        : this(fromSchema, [from], false, toSchema, to, shouldAvoid) {}
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class within a single schema.
+    /// </summary>
+    /// <param name="schema">The schema this migration operates within. Null indicates the default schema.</param>
+    /// <param name="from">The version this migration can migrate from.</param>
+    /// <param name="to">The version this migration migrates to.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> and <paramref name="to"/> are the same value.</exception>
+    public MigrationAttribute(string? schema, int from, int to, bool shouldAvoid = false)
+        : this(schema, [from], false, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a single source version.
+    /// Uses the default schema.
     /// </summary>
     /// <param name="from">The version this migration can migrate from.</param>
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> and <paramref name="to"/> are the same value.</exception>
     public MigrationAttribute(int from, int to, bool shouldAvoid = false)
-        : this([from], false, to, null, null, shouldAvoid) {}
+        : this(null, [from], false, null, to, shouldAvoid) {}
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with multiple source versions and cross-schema capability.
+    /// </summary>
+    /// <param name="fromSchema">The schema this migration can migrate from. Null indicates the default schema.</param>
+    /// <param name="fromList">The array of versions this migration can migrate from.</param>
+    /// <param name="toSchema">The schema this migration migrates to. Null indicates the default schema.</param>
+    /// <param name="to">The version this migration migrates to.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="fromList"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="fromList"/> contains the same version as <paramref name="to"/>.</exception>
+    public MigrationAttribute(string? fromSchema, int[] fromList, string? toSchema, int to, bool shouldAvoid = false)
+        : this(fromSchema, fromList, false, toSchema, to, shouldAvoid) {}
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with multiple source versions within a single schema.
+    /// </summary>
+    /// <param name="schema">The schema this migration operates within. Null indicates the default schema.</param>
+    /// <param name="fromList">The array of versions this migration can migrate from.</param>
+    /// <param name="to">The version this migration migrates to.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="fromList"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="fromList"/> contains the same version as <paramref name="to"/>.</exception>
+    public MigrationAttribute(string? schema, int[] fromList, int to, bool shouldAvoid = false)
+        : this(schema, fromList, false, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with multiple source versions.
+    /// Uses the default schema.
     /// </summary>
-    /// <param name="fromList">The array of versions this migration can migrate from. Cannot be null.</param>
+    /// <param name="fromList">The array of versions this migration can migrate from.</param>
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="fromList"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="fromList"/> contains the same version as <paramref name="to"/>.</exception>
     public MigrationAttribute(int[] fromList, int to, bool shouldAvoid = false)
-        : this(fromList, false, to, null, null, shouldAvoid) {}
+        : this(null, fromList, false, null, to, shouldAvoid) {}
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a range of source versions and cross-schema capability.
+    /// </summary>
+    /// <param name="fromSchema">The schema this migration can migrate from. Null indicates the default schema.</param>
+    /// <param name="fromRangeStart">The start of the inclusive range of versions this migration can migrate from.</param>
+    /// <param name="fromRangeEnd">The end of the inclusive range of versions this migration can migrate from.</param>
+    /// <param name="toSchema">The schema this migration migrates to. Null indicates the default schema.</param>
+    /// <param name="to">The version this migration migrates to.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentException">Thrown when range start is greater than range end, or when <paramref name="to"/> is within the range.</exception>
+    public MigrationAttribute(string? fromSchema, int fromRangeStart, int fromRangeEnd, string? toSchema, int to, bool shouldAvoid = false)
+        : this(fromSchema, [fromRangeStart, fromRangeEnd], true, toSchema, to, shouldAvoid) {}
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a range of source versions within a single schema.
+    /// </summary>
+    /// <param name="schema">The schema this migration operates within. Null indicates the default schema.</param>
+    /// <param name="fromRangeStart">The start of the inclusive range of versions this migration can migrate from.</param>
+    /// <param name="fromRangeEnd">The end of the inclusive range of versions this migration can migrate from.</param>
+    /// <param name="to">The version this migration migrates to.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentException">Thrown when range start is greater than range end, or when <paramref name="to"/> is within the range.</exception>
+    public MigrationAttribute(string? schema, int fromRangeStart, int fromRangeEnd, int to, bool shouldAvoid = false)
+        : this(schema, [fromRangeStart, fromRangeEnd], true, schema, to, shouldAvoid) {}
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with a range of source versions.
+    /// Uses the default schema.
     /// </summary>
     /// <param name="fromRangeStart">The start of the inclusive range of versions this migration can migrate from.</param>
     /// <param name="fromRangeEnd">The end of the inclusive range of versions this migration can migrate from.</param>
     /// <param name="to">The version this migration migrates to.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
-    /// <exception cref="ArgumentException">Thrown when range start is greater than the range end, or when <paramref name="to"/> is within the range.</exception>
+    /// <exception cref="ArgumentException">Thrown when range start is greater than range end, or when <paramref name="to"/> is within the range.</exception>
     public MigrationAttribute(int fromRangeStart, int fromRangeEnd, int to, bool shouldAvoid = false)
-        : this([fromRangeStart, fromRangeEnd], true, to, null, null, shouldAvoid) {}
+        : this(null, [fromRangeStart, fromRangeEnd], true, null, to, shouldAvoid) {}
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with string-based version specification.
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with string-based version specification and cross-schema capability.
     /// Supports single version ("12"), comma-separated list ("3, 6, 12, 7"), or range ("5..10").
     /// </summary>
+    /// <param name="fromSchema">The schema this migration can migrate from. Null indicates the default schema.</param>
     /// <param name="from">The version specification this migration can migrate from. Can be a single version, comma-separated list, or range. Use null to indicate this migration can be applied from any version.</param>
+    /// <param name="toSchema">The schema this migration migrates to. Null indicates the default schema.</param>
     /// <param name="to">The version this migration migrates to as a string.</param>
     /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="to"/> is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> or <paramref name="to"/> contains an invalid version format, is empty/whitespace, when from and to versions are the same, when to version is within a from range, or when a from list contains the to version.</exception>
-    public MigrationAttribute(string? from, string to, bool shouldAvoid = false)
+    /// <exception cref="ArgumentException">Thrown when schema parameters are empty/whitespace, <paramref name="from"/> or <paramref name="to"/> contains an invalid version format or is empty/whitespace, when from and to versions are the same, when to version is within a from range, or when a from list contains the to version.</exception>
+    public MigrationAttribute(string? fromSchema, string? from, string? toSchema, string to, bool shouldAvoid = false)
     {
-        ArgumentNullException.ThrowIfNull(to);
+        // Schemas
+        FromSchema = fromSchema?.Trim();
+        if (FromSchema != null && string.IsNullOrWhiteSpace(FromSchema))
+            throw new ArgumentException("TODO from schema must be defined (null is a valid value)", nameof(fromSchema));
+        ToSchema = toSchema?.Trim();
+        if (ToSchema != null && string.IsNullOrWhiteSpace(ToSchema))
+            throw new ArgumentException("TODO to schema must be defined (null is a valid value)", nameof(toSchema));
 
+        // To
+        ArgumentNullException.ThrowIfNull(to);
         if (string.IsNullOrWhiteSpace(to))
             throw new ArgumentException("To version cannot be empty or whitespace.", nameof(to));
-
         if (!int.TryParse(to.Trim(), out var toVersion))
             throw new ArgumentException("To version must be an integer.", nameof(to));
-
         ToVersion = toVersion;
+
+        // Should avoid
         ShouldAvoid = shouldAvoid;
+
+        // From & IsRange
+
         IsRange = false;
 
         // Handle null "from"
@@ -192,12 +292,12 @@ public sealed class MigrationAttribute : Attribute
                 .Select(part =>
                 {
                     if (!int.TryParse(part, out var version))
-                        throw new ArgumentException("All versions in the list must be an integers.",
+                        throw new ArgumentException("All versions in the list must be integers.",
                             nameof(from));
                     return version;
                 })
                 .Distinct()
-                .ToList();
+                .ToArray();
 
             if (FromVersions.Contains(ToVersion))
                 throw new ArgumentException("From version list cannot contain the same version as the to version.", nameof(from));
@@ -211,5 +311,35 @@ public sealed class MigrationAttribute : Attribute
                 throw new ArgumentException("From version cannot be the same as to version.", nameof(from));
             FromVersions = [version];
         }
+
+        if (FromVersions.Length == 0 && FromSchema != ToSchema)
+        {
+            throw new ArgumentException("Migration setting up schema from scratch can't have different 'from' and 'to' schemas.", nameof(from));
+        }
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with string-based version specification within a single schema.
+    /// Supports single version ("12"), comma-separated list ("3, 6, 12, 7"), or range ("5..10").
+    /// </summary>
+    /// <param name="schema">The schema this migration operates within. Null indicates the default schema.</param>
+    /// <param name="from">The version specification this migration can migrate from. Can be a single version, comma-separated list, or range. Use null to indicate this migration can be applied from any version.</param>
+    /// <param name="to">The version this migration migrates to as a string.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="to"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when schema parameter is empty/whitespace, <paramref name="from"/> or <paramref name="to"/> contains an invalid version format or is empty/whitespace, when from and to versions are the same, when to version is within a from range, or when a from list contains the to version.</exception>
+    public MigrationAttribute(string? schema, string? from, string to, bool shouldAvoid = false)
+        : this(schema, from, schema, to, shouldAvoid) { }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MigrationAttribute"/> class with string-based version specification in the default schema.
+    /// Supports single version ("12"), comma-separated list ("3, 6, 12, 7"), or range ("5..10").
+    /// </summary>
+    /// <param name="from">The version specification this migration can migrate from. Can be a single version, comma-separated list, or range. Use null to indicate this migration can be applied from any version.</param>
+    /// <param name="to">The version this migration migrates to as a string.</param>
+    /// <param name="shouldAvoid">Whether this migration should be avoided if alternatives exist. Default is false.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="to"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="from"/> or <paramref name="to"/> contains an invalid version format or is empty/whitespace, when from and to versions are the same, when to version is within a from range, or when a from list contains the to version.</exception>
+    public MigrationAttribute(string? from, string to, bool shouldAvoid = false)
+        : this(null, from, null, to, shouldAvoid) { }
 }

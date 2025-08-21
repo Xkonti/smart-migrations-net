@@ -10,5 +10,9 @@
         <PackageTags>database;migration;version;</PackageTags>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Update="MinVer" Version="6.1.0-beta.1" />
+    </ItemGroup>
+
 
 </Project>
